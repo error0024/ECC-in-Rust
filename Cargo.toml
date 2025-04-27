@@ -1,0 +1,8 @@
+[package]
+name = "ecc_in_rust_udemy"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+num-bigint = "0.4.6"
+num-prime = "0.4.4"

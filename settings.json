@@ -1,0 +1,22 @@
+{
+    // Rust Analyzer settings
+    "rust-analyzer.diagnostics.enable": false,
+    "rust-analyzer.diagnostics.onSave": true,
+    "rust-analyzer.checkOnSave": true,
+    "rust-analyzer.checkOnType": false,
+    "rust-analyzer.checkOnSave.mode": "full",
+    "rust-analyzer.checkOnSave.enable": true,
+
+
+    
+    // Optional: Delay diagnostics slightly after save
+    "rust-analyzer.diagnostics.delay": 500,
+    
+    // Keep all completion features enabled
+    "rust-analyzer.completion.enable": true,
+    "editor.quickSuggestions": {
+      "other": true,
+      "comments": true,
+      "strings": true
+    }
+  }
