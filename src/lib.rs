@@ -57,7 +57,14 @@ impl FiniteField {
 }
 
 impl EllipticCurve {
-    fn add(&self, c: &Point, d: &Point) -> Point {
+    fn coord_add(&self, s: &BigUint, x1: &BigUint, y1: &BigUint, x2: &BigUint, y2: &BigUint) -> Point {
+        let x = FiniteField::subtract(&FiniteField::subtract(&s.modpow(&BigUint::from(2u32), &self.p), x1, &self.p), &x2, &self.p);
+        let y =  FiniteField::subtract(&FiniteField::mult(&s, &FiniteField::subtract(x1, &x, &self.p),  &self.p), y1,  &self.p);
+        assert!(self.is_on_curve(&Point::Coordinate(x.clone(), y.clone())), "addition went wrong");
+        return Point::Coordinate(x, y);
+    }
+
+    pub fn add(&self, c: &Point, d: &Point) -> Point {
         assert!(self.is_on_curve(c), "Point is not a curve!");
         assert!(self.is_on_curve(d), "Point is not a curve!");
         if *c == *d {
@@ -67,33 +74,51 @@ impl EllipticCurve {
             (Point::Identity, _) => d.clone(),
             (_, Point::Identity) => c.clone(),
             (Point::Coordinate(x1, y1), Point::Coordinate(x2, y2)) => {
+                if x1 == x2 {
+                    return Point::Identity;
+                }
                 // s = (y2-y1/x2-x1) mod p
                 // x = s^2 - x1 -x2 mod p
                 // y = s* (x1 - x) - y1 mod p
                 let s = FiniteField::divide(
                     &FiniteField::subtract(y2, y1, &self.p),
                     &FiniteField::subtract( x2, x1, &self.p), &self.p);
-                let x = FiniteField::subtract(&FiniteField::subtract(&s.modpow(&BigUint::from(2u32), &self.p), x1, &self.p), &x2, &self.p);
-                let y =  FiniteField::subtract(&FiniteField::mult(&s, &FiniteField::subtract(x1, &x, &self.p),  &self.p), y1,  &self.p);
-                assert!(self.is_on_curve(&Point::Coordinate(x.clone(), y.clone())), "addition went wrong");
-                return Point::Coordinate(x, y);
+                self.coord_add(&s, x1, y1, x2, y2)
             }
             
         }
     }
 
-    fn double(&self, c: &Point) -> Point {
+    pub fn double(&self, c: &Point) -> Point {
         assert!(self.is_on_curve(c), "Point is not a curve!");
-        todo!()
+        match c {
+            Point::Identity => Point::Identity,
+            Point::Coordinate(x1, y1) => {
+                // s = (3*x1^2 + a)/ (2*y1) mod p
+                // x = s^2 - x1 - x1 mod p
+                // y = s* (x1 - x) - y1 mod p
+                let s = FiniteField::divide(
+                    &FiniteField::add(&FiniteField::mult(&BigUint::from(3u32), &x1.modpow(&BigUint::from(2u32), &self.p), &self.p), &self.a, &self.p),
+                    &FiniteField::mult( &BigUint::from(2u32), y1, &self.p), &self.p);
+                self.coord_add(&s, x1, y1, x1, y1)
+            }
+        }
     }
 
-    fn scalar_mul(&self, c: &Point, d: &BigUint ) -> Point {
-        //addition/doubling algorithm
+    pub fn scalar_mul(&self, c: &Point, d: &BigUint ) -> Point {
         assert!(self.is_on_curve(c), "Point is not a curve!");
-        todo!()
+        if d == &BigUint::from(0u32) || *c == Point::Identity {
+            Point::Identity
+        } else if d == &BigUint::from(1u32) {
+            c.clone()
+        } else if d % 2u32 == BigUint::from(1u32) {
+            self.add(c, &self.scalar_mul(c, &(d - 1u32)))
+        } else {
+            self.scalar_mul(&self.double(c), &(d / 2u32))
+        }
     }
     
-    fn is_on_curve(&self, c: &Point) -> bool {
+    pub fn is_on_curve(&self, c: &Point) -> bool {
         //y^2 = x^3 + ax + b
         match c {
             Point::Coordinate(x, y ) => {
@@ -256,7 +281,7 @@ mod tests {
     }
 
     #[test]
-    fn test_ec_point_addition_3(){
+    fn test_ec_point_addition_2(){
         let ecc = EllipticCurve{
             //y^2 = x^3 + 2*x + 2 in F_17
             a: BigUint::from(2u32),
@@ -271,6 +296,148 @@ mod tests {
 
         let res = ecc.add(&p2, &p1);
         assert_eq!(res, p1);
+        print!("{:?}", res);    
+    }
+
+    #[test]
+    fn test_ec_point_addition_3(){
+        let ecc = EllipticCurve{
+            //y^2 = x^3 + 2*x + 2 in F_17
+            a: BigUint::from(2u32),
+            b: BigUint::from(2u32),
+            p: BigUint::from(17u32),
+        };
+        // (6,3) + (6,14) = inf
+        let p1 = Point::Coordinate(BigUint::from(6u32), BigUint::from(3u32));
+        let p2 = Point::Coordinate(BigUint::from(6u32), BigUint::from(14u32));
+        assert_eq!(ecc.is_on_curve(&p1), true);
+        assert_eq!(ecc.is_on_curve(&p2), true);
+
+        let res = ecc.add(&p2, &p1);
+        assert_eq!(res, Point::Identity);
+        print!("{:?}", res);    
+    }
+
+    #[test]
+    fn test_ec_point_double_0(){
+        let ecc = EllipticCurve{
+            //y^2 = x^3 + 2*x + 2 in F_17
+            a: BigUint::from(2u32),
+            b: BigUint::from(2u32),
+            p: BigUint::from(17u32),
+        };
+        // (5,1) + (5,1) =  (6,3)
+        let p1 = Point::Coordinate(BigUint::from(5u32), BigUint::from(1u32));
+        let r = Point::Coordinate(BigUint::from(6u32), BigUint::from(3u32));
+        assert_eq!(ecc.is_on_curve(&p1), true);
+        assert_eq!(ecc.is_on_curve(&r), true);
+
+        let res = ecc.double(&p1);
+        assert_eq!(res, r);
+        print!("{:?}", res);    
+    }
+
+    #[test]
+    fn test_ec_point_double_1(){
+        let ecc = EllipticCurve{
+            //y^2 = x^3 + 2*x + 2 in F_17
+            a: BigUint::from(2u32),
+            b: BigUint::from(2u32),
+            p: BigUint::from(17u32),
+        };
+        // (5,1) + (5,1) =  (6,3)
+        let p1 = Point::Coordinate(BigUint::from(5u32), BigUint::from(1u32));
+        let r = Point::Coordinate(BigUint::from(6u32), BigUint::from(3u32));
+        assert_eq!(ecc.is_on_curve(&p1), true);
+        assert_eq!(ecc.is_on_curve(&r), true);
+
+        let res = ecc.add(&p1, &p1);
+        assert_eq!(res, r);
+        print!("{:?}", res);    
+    }
+
+    #[test]
+    fn test_ec_point_double_2(){
+        let ecc = EllipticCurve{
+            //y^2 = x^3 + 2*x + 2 in F_17
+            a: BigUint::from(2u32),
+            b: BigUint::from(2u32),
+            p: BigUint::from(17u32),
+        };
+        // (5,1) + (5,1) =  (6,3)
+        let p1 = Point::Identity;
+        let r = Point::Identity;
+        assert_eq!(ecc.is_on_curve(&p1), true);
+        assert_eq!(ecc.is_on_curve(&r), true);
+
+        let res = ecc.double(&p1);
+        assert_eq!(res, r);
+        print!("{:?}", res);    
+    }
+
+    #[test]
+    fn test_ec_scalar_mult_0(){
+        let ecc = EllipticCurve{
+            //y^2 = x^3 + 2*x + 2 in F_17
+            a: BigUint::from(2u32),
+            b: BigUint::from(2u32),
+            p: BigUint::from(17u32),
+        };
+        // (5,1) + (5,1) =  (6,3)
+        let p1 = Point::Coordinate(BigUint::from(5u32), BigUint::from(1u32));
+        let r1: Point = Point::Coordinate(BigUint::from(6u32), BigUint::from(3u32));
+        let r2: Point = Point::Coordinate(BigUint::from(7u32), BigUint::from(11u32));
+        let r3: Point = Point::Identity;
+        let r4: Point = Point::Coordinate(BigUint::from(5u32), BigUint::from(16u32));
+        assert_eq!(ecc.is_on_curve(&p1), true);
+
+        let res = ecc.scalar_mul(&p1, &BigUint::from(2u32));
+        assert_eq!(res, r1);
+
+        let res = ecc.scalar_mul(&p1, &BigUint::from(10u32));
+        assert_eq!(res, r2);
+
+        let res = ecc.scalar_mul(&p1, &BigUint::from(19u32));
+        assert_eq!(res, r3);
+
+        let res = ecc.scalar_mul(&p1, &BigUint::from(18u32));
+        assert_eq!(res, r4);      
+    
+    }
+
+    #[test]
+    fn test_ec_scalar_mult_1(){
+        let ecc = EllipticCurve{
+            //y^2 = x^3 + 2*x + 2 in F_17
+            a: BigUint::from(2u32),
+            b: BigUint::from(2u32),
+            p: BigUint::from(17u32),
+        };
+        // (5,1) + (5,1) =  (6,3)
+        let p1 = Point::Identity;
+        let r = Point::Identity;
+        assert_eq!(ecc.is_on_curve(&p1), true);
+
+        let res = ecc.scalar_mul(&p1, &BigUint::from(2u32));
+        assert_eq!(res, r);
+        print!("{:?}", res);    
+    }
+
+    #[test]
+    fn test_ec_scalar_mult_2(){
+        let ecc = EllipticCurve{
+            //y^2 = x^3 + 2*x + 2 in F_17
+            a: BigUint::from(2u32),
+            b: BigUint::from(2u32),
+            p: BigUint::from(17u32),
+        };
+        // (5,1) + (5,1) =  (6,3)
+        let p1 = Point::Coordinate(BigUint::from(5u32), BigUint::from(1u32));
+        let r = Point::Identity;
+        assert_eq!(ecc.is_on_curve(&p1), true);
+
+        let res = ecc.scalar_mul(&p1, &BigUint::from(0u32));
+        assert_eq!(res, r);
         print!("{:?}", res);    
     }
 }
