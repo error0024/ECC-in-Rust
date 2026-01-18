@@ -4,5 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-num-bigint = "0.4.6"
+num-bigint = {version="0.4.6", features=["rand"]}
+#Features are optional functionality that crates can provide. They're disabled by default to reduce compile time, reduce binary size, avoid unnecessary dependencies
 num-prime = "0.4.4"
+ec-generic = "0.1.9"  
+rand = "0.9.2"
+sha256 = "1.6.0"
+hex = "0.4.3"
