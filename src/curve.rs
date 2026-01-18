@@ -8,6 +8,7 @@ pub enum Point {
     Identity,
 }
 
+#[derive(Clone)]
 pub struct EllipticCurve {
     //y^2 = x^2 + a*x + b in F_p
     pub a: BigUint,
